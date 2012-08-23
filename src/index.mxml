@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- index.mxml -->
+<!-- Author: Yong Su -->
+<!-- Date: 8/23/2012 -->
+<s:Application xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx"
+			   initialize="init()"
+>
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.geom.Point;
+			import mx.controls.Menu;
+			import mx.core.FlexGlobals;
+			import mx.utils.StringUtil;
+			import mx.events.MenuEvent;
+			import mx.events.DataGridEvent;
+			import mx.collections.ArrayCollection;
+			
+			/**
+			 * Data providers
+			 */
+			[Bindable] public var dpMenu:ArrayCollection;
+			[Bindable] public var dpDataGrid:ArrayCollection;
+			
+			/**
+			 * A dummy array for the data grid
+			 */
+			private var gridData:Array = [
+				{Id:1, 	Company:'Company A', 	Price:11.99, 	Size:"large", 	Date:"09/01/2007"},
+				{Id:2, 	Company:'Company B', 	Price:12.00, 	Size:"small", 	Date:"15/08/2012"},
+				{Id:3, 	Company:'Company C', 	Price:17.05, 	Size:"medium", 	Date:"12/07/2012"}
+			];
+			
+			/**
+			 * The column header context menu
+			 */
+			private var columnHeaderMenu:Menu = new Menu();
+			
+			/**
+			 * Initialize the application
+			 */
+			public function init():void {
+				// Capture the right click event from rightClick.js
+				ExternalInterface.addCallback( "rightClick", onRightClick );
+				
+				// Initialize the data grid data provider
+				dpDataGrid = new ArrayCollection( gridData );
+				
+				// Initialize the column header menu
+				dpMenu = new ArrayCollection();
+				columnHeaderMenu = Menu.createMenu( stage, dpMenu, false );
+				columnHeaderMenu.variableRowHeight = true;
+				
+				// Listen to item click event
+				columnHeaderMenu.addEventListener( MenuEvent.ITEM_CLICK, onMenuItemClicked );
+			}
+			
+			/**
+			 * Called when an item in the menu is clicked.
+			 * 
+			 * @e MenuEvent instance
+			 */
+			private function onMenuItemClicked( e:MenuEvent ): void {
+				var item:Object = e.item;
+				switch (item.menuType) {
+					// By using a menuType property, we can extend more menu features
+					case "column":
+						// Find out which column is selected and toggle the visibility
+						var grid:DataGrid = item.grid as DataGrid;
+						for(var i:int = 0; i < grid.columns.length; i++) {
+							var col:DataGridColumn = grid.columns[i] as DataGridColumn;
+							// Simply compare the header text to find out the selected column
+							if (col.headerText == item.label) {
+								col.visible = !col.visible;
+								break;
+							}
+						}
+						break;
+				}
+			}
+			
+			/**
+			 * Right click handler
+			 * For more information about the right click event hijacking, see the rightClick.js and index.template.html
+			 */
+			private function onRightClick():void
+			{
+				// Obtain all the objects underneath the mouse pointer
+				var objects:Array = stage.getObjectsUnderPoint(new Point(stage.mouseX, stage.mouseY));
+				
+				// Loop through all the objects and find out a data grid
+				for (var i:int = 0; i < objects.length; i++) {
+					var object:DisplayObject = objects[i] as DisplayObject;
+					// Detect whether a grid header is clicked
+					if (getQualifiedClassName(object).indexOf("DataGridHeaderBackgroundSkin") > -1) {
+						// Redraw the context menu
+						dpMenu.removeAll();
+						// Locate the actual grid object
+						// The grid can be any gird that inherits from the DataGrid object
+						var grid:DataGrid = object.parent.parent.parent as DataGrid;
+						// Get the total number of columns
+						var numColumns:int = grid.columns.length;
+						// Calculate how many visible columns are left
+						// This is used to disiable the last visiable column in the context menu
+						var numVisibleColumns:int = 0;
+						var columns:Array = grid.columns;
+						var col:DataGridColumn;
+						for(var j:int = 0; j < numColumns; j++) {
+							col = columns[j] as DataGridColumn;
+							// Skip the column that has empty header text
+							// You can customize to skip certain column here
+							if (StringUtil.trim(col.headerText).length == 0) continue;
+							if (col.visible) numVisibleColumns++;
+						}
+						
+						// Deploy the menu items
+						for(j = 0; j < numColumns; j++) {
+							col = columns[j] as DataGridColumn;
+							if (StringUtil.trim(col.headerText).length == 0) continue;
+							dpMenu.addItem({ label: col.headerText, type: "check", toggled: col.visible, menuType: "column", grid:grid, enabled:!(numVisibleColumns<=1 && col.visible) });
+						}
+						
+						// Finally, display the menu
+						showMenu(columnHeaderMenu, stage.mouseX, stage.mouseY);
+						break;
+					}
+				}
+				
+			}
+			
+			/**
+			 * Shows a popup menu at the given (x,y) position, ensuring that the menu stays within screen bounds.
+			 * 
+			 * @menu a Menu instance
+			 * @x menu x position
+			 * @y menu y position
+			 */
+			public static function showMenu( menu:Menu, x:Number, y:Number ): void {
+				// We need to show, THEN move the menu because menu.width & menu.height
+				// are not valid until we actually show the menu atleast once
+				menu.show( x, y );
+				
+				// Adjust x
+				var shiftX:Number = x + menu.width - FlexGlobals.topLevelApplication.screen.width;
+				if( shiftX > 0 ) x = Math.max( x - shiftX, 0 );
+				
+				// Adjust y
+				var shiftY:Number = y + menu.height - FlexGlobals.topLevelApplication.screen.height;
+				if( shiftY > 0 ) y = Math.max( y - shiftY, 0 );
+				
+				// Move to new position
+				menu.move( x, y );
+			}
+		]]>
+	</fx:Script>
+	
+	<!-- Demo grid -->
+	<mx:DataGrid id="demoGrid" width="100%" height="100%" dataProvider="{dpDataGrid}">
+		<mx:columns>
+			<mx:DataGridColumn dataField="Id" />
+			<mx:DataGridColumn dataField="Company" />
+			<mx:DataGridColumn dataField="Price" />
+			<mx:DataGridColumn dataField="Size" />
+			<mx:DataGridColumn dataField="Date" />
+		</mx:columns> 
+	</mx:DataGrid>
+	
+</s:Application>
